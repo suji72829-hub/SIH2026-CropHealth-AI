@@ -1246,341 +1246,16 @@ def save_ai_feedback(
     )
 
     return "✅ Field confirmation saved for AI improvement."
-
-
-
-
-# =========================================================
-# INTEGRATED DEPLOYMENT UI
-# =========================================================
-
-    
-    
-def generate_followup_feedback(condition):
-
-if condition == "Improving":
-    return """
-
-🟢 FOLLOW-UP STATUS
-
-Crop condition is improving.
-
-Recommended:
-• Continue the advised IPM practices.
-• Continue weather-risk monitoring.
-• Observe the crop regularly.
-"""
-
-elif condition == "No Change":
-    return """
-
-🟡 FOLLOW-UP STATUS
-
-No significant change has been reported.
-
-Recommended:
-• Continue monitoring the crop.
-• Follow the existing advisory.
-• Reassess the crop after further observation.
-"""
-
-elif condition == "Worsening":
-    return """
-
-🔴 FOLLOW-UP STATUS
-
-Crop condition is worsening.
-
-Recommended:
-• Contact an agricultural expert.
-• Consider laboratory confirmation if required.
-• Avoid applying additional pesticides without proper guidance.
-• Upload a new crop image for further AI analysis if available.
-"""
-
-elif condition == "Recovered":
-    return """
-
-✅ FOLLOW-UP STATUS
-
-Crop recovery has been reported.
-
-Recommended:
-• Continue regular crop monitoring.
-• Maintain field hygiene.
-• Record the recovery for future AI improvement.
-"""
-
-return "Select the current crop condition."
-
-def save_followup_with_feedback(
-report_number,
-condition,
-observation
-):
-
-df = get_reports()
-
-if df.empty:
-    return "⚠️ No previous report found."
-
-try:
-    index = int(report_number) - 1
-    row = df.iloc[index]
-
-    feedback = generate_followup_feedback(condition)
-
-    record = {
-        "Followup_Date":
-            datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-
-        "Report_Number":
-            report_number,
-
-        "Disease":
-            row["Disease"],
-
-        "Disease_Confidence":
-            row["Disease_Confidence"],
-
-        "Original_Risk_Level":
-            row["Risk_Level"],
-
-        "Original_Risk_Score":
-            row["Risk_Score"],
-
-        "Latitude":
-            row["Latitude"],
-
-        "Longitude":
-            row["Longitude"],
-
-        "Language":
-            row["Language"],
-
-        "Current_Crop_Condition":
-            condition,
-
-        "Farmer_Observation":
-            observation,
-
-        "Followup_Feedback":
-            feedback
-    }
-
-    new_df = pd.DataFrame([record])
-
-    if os.path.exists(FOLLOWUP_FILE):
-        old_df = pd.read_csv(FOLLOWUP_FILE)
-        new_df = pd.concat(
-            [old_df, new_df],
-            ignore_index=True
-        )
-
-    new_df.to_csv(
-        FOLLOWUP_FILE,
-        index=False
-    )
-
-    return feedback
-
-except Exception as e:
-    return f"⚠️ Error: {e}"
-
-def load_followup_history():
-
-if not os.path.exists(FOLLOWUP_FILE):
-    return pd.DataFrame(
-        columns=[
-            "Followup_Date",
-            "Report_Number",
-            "Disease",
-            "Disease_Confidence",
-            "Original_Risk_Level",
-            "Original_Risk_Score",
-            "Latitude",
-            "Longitude",
-            "Language",
-            "Current_Crop_Condition",
-            "Farmer_Observation",
-            "Followup_Feedback"
-        ]
-    )
-
-return pd.read_csv(FOLLOWUP_FILE)
-
-def record_followup_confirmation(
-report_number,
-field_confirmed,
-actual_disease="",
-farmer_note=""
-):
-
-df = get_reports()
-
-if df.empty:
-    return "⚠️ No previous report found."
-
-try:
-    index = int(report_number) - 1
-    row = df.iloc[index]
-
-    predicted_disease = str(row["Disease"])
-
-    save_ai_feedback(
-        predicted_disease=predicted_disease,
-        field_confirmed=field_confirmed,
-        actual_disease=actual_disease,
-        farmer_note=farmer_note
-    )
-
-    return "✅ Field confirmation saved for AI improvement."
-
-except Exception as e:
-    return f"⚠️ Error: {e}"
-
-import pandas as pd
-from datetime import datetime
-
-FEEDBACK_FILE = "sih_ai_feedback.csv"
-
-def save_ai_feedback(
-predicted_disease,
-field_confirmed,
-actual_disease="",
-farmer_note=""
-):
-
-record = {
-    "Date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-    "Predicted Disease": predicted_disease,
-    "Field Confirmed": field_confirmed,
-    "Actual Disease": actual_disease,
-    "Farmer Note": farmer_note
-}
-
-new_df = pd.DataFrame([record])
-
-try:
-    old_df = pd.read_csv(FEEDBACK_FILE)
-    new_df = pd.concat(
-        [old_df, new_df],
-        ignore_index=True
-    )
-except FileNotFoundError:
-    pass
-
-new_df.to_csv(
-    FEEDBACK_FILE,
-    index=False
-)
-
-return "✅ Field confirmation saved for AI improvement."
-def officer_dashboard():
-
-    df = get_reports()
-
-    if df.empty:
-        return (
-            "## 📊 Agriculture Officer Dashboard\n\n"
-            "⚠️ No farmer reports available.",
-            pd.DataFrame(),
-            "<p>📍 No location data available.</p>"
-        )
-
-    total = len(df)
-
-    high = len(
-        df[df["Risk_Level"].astype(str).str.contains("HIGH", na=False)]
-    )
-
-    medium = len(
-        df[df["Risk_Level"].astype(str).str.contains("MEDIUM", na=False)]
-    )
-
-    low = len(
-        df[df["Risk_Level"].astype(str).str.contains("LOW", na=False)]
-    )
-
-    disease_counts = df["Disease"].value_counts()
-
-    most_disease = (
-        disease_counts.index[0]
-        if not disease_counts.empty
-        else "None"
-    )
-
-    map_df = df.dropna(
-        subset=["Latitude", "Longitude"]
-    ).copy()
-
-    hotspot_count = 0
-
-    if len(map_df) >= 2:
-
-        coords = map_df[
-            ["Latitude", "Longitude"]
-        ].values
-
-        clustering = DBSCAN(
-            eps=0.02,
-            min_samples=2
-        ).fit(coords)
-
-        map_df["Hotspot_ID"] = clustering.labels_
-
-        hotspot_count = len(
-            set(clustering.labels_) - {-1}
-        )
-
-    else:
-        map_df["Hotspot_ID"] = -1
-
-    officer_map = folium.Map(
-        location=[11.3410, 77.7172],
-        zoom_start=7
-    )
-
-    for _, row in map_df.iterrows():
-
-        folium.Marker(
-            location=[
-                row["Latitude"],
-                row["Longitude"]
-            ],
-            popup=(
-                f"Disease: {row['Disease']}<br>"
-                f"Risk: {row['Risk_Level']}<br>"
-                f"Pest: {row['Pest']}"
-            )
-        ).add_to(officer_map)
-
-    summary = f"""
-## 📊 Agriculture Officer Dashboard
-
-**Total Farmer Reports:** {total}
-
-🔴 **High Risk:** {high}
-
-🟡 **Medium Risk:** {medium}
-
-🟢 **Low Risk:** {low}
-
-🦠 **Most Reported Disease:** {most_disease}
-
-📍 **Detected Hotspots:** {hotspot_count}
-"""
-
-    return (
-        summary,
-        df,
-        officer_map._repr_html_()
-    )
 # =========================================================
 # INTEGRATED DEPLOYMENT UI
 # =========================================================
 # =========================================================
 # INTEGRATED DEPLOYMENT UI
+# =========================================================
+
+
+# =========================================================
+# OFFICER DASHBOARD
 # =========================================================
 
 def officer_dashboard():
@@ -1653,7 +1328,6 @@ def officer_dashboard():
         )
 
     else:
-
         map_df["Hotspot_ID"] = -1
 
     officer_map = folium.Map(
@@ -1726,11 +1400,24 @@ async () => {
                 alert("Location permission denied.");
                 resolve(["", ""]);
             }
+
         );
 
     });
 }
 """
+
+
+# =========================================================
+# AI FEEDBACK DISPLAY
+# =========================================================
+
+def load_ai_feedback():
+
+    if not os.path.exists(FEEDBACK_FILE):
+        return pd.DataFrame()
+
+    return pd.read_csv(FEEDBACK_FILE)
 
 
 # =========================================================
@@ -2188,15 +1875,6 @@ These records are stored for future model improvement.
             interactive=False
         )
 
-
-        def load_ai_feedback():
-
-            if not os.path.exists(FEEDBACK_FILE):
-                return pd.DataFrame()
-
-            return pd.read_csv(FEEDBACK_FILE)
-
-
         feedback_button.click(
             fn=load_ai_feedback,
             inputs=[],
@@ -2212,3 +1890,5 @@ app.launch(
     server_name="0.0.0.0",
     server_port=int(os.getenv("PORT", "7860"))
 )
+         
+    
