@@ -332,51 +332,11 @@ def complete_analysis(img, language, latitude, longitude):
         # =================================================
         # 3. PEST DETECTION
         # =================================================
+          
 
-        pest_name = "No pest detected"
-        pest_conf = 0.0
-
-        try:
-
-            pest_results = pest_model.predict(
-                source=img,
-                imgsz=320,
-                conf=0.25,
-                max_det=3,
-                verbose=False
-            )
-
-            if (
-                len(pest_results) > 0
-                and len(pest_results[0].boxes) > 0
-            ):
-
-                boxes = pest_results[0].boxes
-
-                # Select highest-confidence detection
-                best_index = int(
-                    torch.argmax(boxes.conf).item()
-                )
-
-                pest_conf = float(
-                    boxes.conf[best_index].item()
-                )
-
-                pest_id = int(
-                    boxes.cls[best_index].item()
-                )
-
-                pest_name = pest_results[0].names[
-                    pest_id
-                ]
-
-        except Exception as e:
-
-            print(
-                "⚠️ Pest detection error:",
-                e
-            )
-
+pest_name = "No pest detection (testing)"
+pest_conf = 0.0
+                 
 
         # =================================================
         # 4. WEATHER
