@@ -2042,10 +2042,10 @@ These records are stored for future model improvement.
 # =========================================================
 # RENDER DEPLOYMENT
 # =========================================================
+PORT = int(os.environ.get("PORT", 10000))
 
 app.launch(
     server_name="0.0.0.0",
-    server_port=int(os.getenv("PORT", "7860"))
+    server_port=PORT,
+    share=False
 )
-         
-    
