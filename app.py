@@ -274,8 +274,6 @@ Contact an agricultural expert if the risk is high.
 """
 
     return generate_advisory(disease, pest, weather_risk)
-
-
 def complete_analysis(img, language, latitude, longitude):
 
     if img is None:
@@ -289,99 +287,240 @@ def complete_analysis(img, language, latitude, longitude):
             "⚠️ Please upload an image."
         )
 
-    # 🦠 Disease detection
-    image_tensor = disease_transform(img).unsqueeze(0)
-
-    with torch.no_grad():
-        output = disease_model(image_tensor)
-        probs = torch.softmax(output, dim=1)
-        confidence, predicted = torch.max(probs, 1)
-
-    disease = classes[predicted.item()]
-    disease_conf = confidence.item()
-
-    # 🔬 Expert validation
-    if disease_conf >= CONFIDENCE_THRESHOLD:
-        validation = "✅ Prediction confidence acceptable."
-    else:
-        validation = (
-            "⚠️ Uncertain prediction\n"
-            "🔬 Expert validation recommended."
-        )
-
-    # 🐛 Pest detection
-    pest_results = pest_model.predict(
-        source=img,
-        conf=0.25,
-        verbose=False
-    )
-
-    pest_name = "No pest detected"
-    pest_conf = 0
-
-    if len(pest_results) > 0 and len(pest_results[0].boxes) > 0:
-        box = pest_results[0].boxes[0]
-        pest_conf = float(box.conf[0])
-        pest_id = int(box.cls[0])
-        pest_name = pest_results[0].names[pest_id]
-
-    # 🌦️ Weather
-    url = (
-        f"https://api.open-meteo.com/v1/forecast?"
-        f"latitude={latitude}&longitude={longitude}"
-        f"&current=temperature_2m,relative_humidity_2m,rain"
-    )
-
     try:
-        weather = requests.get(url, timeout=10).json()
 
-        temperature = weather["current"]["temperature_2m"]
-        humidity = weather["current"]["relative_humidity_2m"]
-        rainfall = weather["current"]["rain"]
+        # =================================================
+        # 1. DISEASE DETECTION
+        # =================================================
 
-        weather_risk = get_weather_risk(
-            temperature,
-            humidity,
-            rainfall
-        )
+        image_tensor = disease_transform(img).unsqueeze(0)
 
-    except Exception:
-        temperature = "Unavailable"
-        humidity = "Unavailable"
-        rainfall = "Unavailable"
+        disease_model.eval()
+
+        with torch.no_grad():
+
+            output = disease_model(image_tensor)
+
+            probs = torch.softmax(output, dim=1)
+
+            confidence, predicted = torch.max(
+                probs, 1
+            )
+
+        disease = classes[predicted.item()]
+        disease_conf = float(confidence.item())
+
+
+        # =================================================
+        # 2. EXPERT VALIDATION
+        # =================================================
+
+        if disease_conf >= CONFIDENCE_THRESHOLD:
+
+            validation = (
+                "✅ Prediction confidence acceptable."
+            )
+
+        else:
+
+            validation = (
+                "⚠️ Uncertain prediction\n"
+                "🔬 Expert validation recommended."
+            )
+
+
+        # =================================================
+        # 3. PEST DETECTION
+        # =================================================
+
+        pest_name = "No pest detected"
+        pest_conf = 0.0
+
+        try:
+
+            pest_results = pest_model.predict(
+                source=img,
+                imgsz=320,
+                conf=0.25,
+                max_det=3,
+                verbose=False
+            )
+
+            if (
+                len(pest_results) > 0
+                and len(pest_results[0].boxes) > 0
+            ):
+
+                boxes = pest_results[0].boxes
+
+                # Select highest-confidence detection
+                best_index = int(
+                    torch.argmax(boxes.conf).item()
+                )
+
+                pest_conf = float(
+                    boxes.conf[best_index].item()
+                )
+
+                pest_id = int(
+                    boxes.cls[best_index].item()
+                )
+
+                pest_name = pest_results[0].names[
+                    pest_id
+                ]
+
+        except Exception as e:
+
+            print(
+                "⚠️ Pest detection error:",
+                e
+            )
+
+
+        # =================================================
+        # 4. WEATHER
+        # =================================================
+
+        temperature = 0.0
+        humidity = 0.0
+        rainfall = 0.0
+
         weather_risk = "⚠️ Weather unavailable"
 
-    # 📊 Overall risk
-    risk_score, risk_level = calculate_overall_risk(
-        disease_conf,
-        pest_conf,
-        weather_risk
-    )
+        try:
 
-    # 🚨 Farmer alert
-    farmer_alert = generate_farmer_alert(risk_level)
+            latitude = float(latitude)
+            longitude = float(longitude)
 
-    # 💊 Advisory
-    advisory = get_multilingual_advisory(
-        disease,
-        pest_name,
-        weather_risk,
-        language
-    )
+            url = (
+                "https://api.open-meteo.com/v1/forecast?"
+                f"latitude={latitude}&"
+                f"longitude={longitude}&"
+                "current="
+                "temperature_2m,"
+                "relative_humidity_2m,"
+                "rain"
+            )
 
-    # 🗺️ Farmer location map
-    farmer_map = folium.Map(
-        location=[latitude, longitude],
-        zoom_start=13
-    )
+            response = requests.get(
+                url,
+                timeout=3
+            )
 
-    folium.Marker(
-        [latitude, longitude],
-        popup="📍 Farmer Field Location",
-        tooltip="Farmer Location"
-    ).add_to(farmer_map)
+            weather = response.json()
 
-    analysis = f"""
+            current = weather.get(
+                "current",
+                {}
+            )
+
+            temperature = float(
+                current.get(
+                    "temperature_2m",
+                    0
+                )
+            )
+
+            humidity = float(
+                current.get(
+                    "relative_humidity_2m",
+                    0
+                )
+            )
+
+            rainfall = float(
+                current.get(
+                    "rain",
+                    0
+                )
+            )
+
+            weather_risk = get_weather_risk(
+                temperature,
+                humidity,
+                rainfall
+            )
+
+        except Exception as e:
+
+            print(
+                "⚠️ Weather error:",
+                e
+            )
+
+
+        # =================================================
+        # 5. OVERALL RISK
+        # =================================================
+
+        risk_score, risk_level = calculate_overall_risk(
+            disease_conf,
+            pest_conf,
+            weather_risk
+        )
+
+
+        # =================================================
+        # 6. FARMER ALERT
+        # =================================================
+
+        farmer_alert = generate_farmer_alert(
+            risk_level
+        )
+
+
+        # =================================================
+        # 7. FARMER ADVISORY
+        # =================================================
+
+        advisory = get_multilingual_advisory(
+            disease,
+            pest_name,
+            weather_risk,
+            language
+        )
+
+
+        # =================================================
+        # 8. FARMER LOCATION MAP
+        # =================================================
+
+        try:
+
+            farmer_map = folium.Map(
+                location=[
+                    latitude,
+                    longitude
+                ],
+                zoom_start=13
+            )
+
+            folium.Marker(
+                [
+                    latitude,
+                    longitude
+                ],
+                popup="📍 Farmer Field Location",
+                tooltip="Farmer Location"
+            ).add_to(farmer_map)
+
+            map_html = (
+                farmer_map._repr_html_()
+            )
+
+        except Exception:
+
+            map_html = (
+                "<p>📍 Location map unavailable.</p>"
+            )
+
+
+        # =================================================
+        # 9. ANALYSIS OUTPUT
+        # =================================================
+
+        analysis = f"""
 🌱 CROP HEALTH ANALYSIS
 
 🦠 Disease:
@@ -398,9 +537,9 @@ def complete_analysis(img, language, latitude, longitude):
 
 🌦️ LIVE WEATHER
 
-🌡️ Temperature: {temperature} °C
-💧 Humidity: {humidity} %
-🌧️ Rainfall: {rainfall} mm
+🌡️ Temperature: {temperature:.1f} °C
+💧 Humidity: {humidity:.1f} %
+🌧️ Rainfall: {rainfall:.1f} mm
 
 ⚠️ Weather Risk:
 {weather_risk}
@@ -416,19 +555,37 @@ Latitude: {latitude}
 Longitude: {longitude}
 """
 
-    status = "✅ Analysis completed successfully."
+        status = (
+            "✅ Analysis completed successfully."
+        )
 
-    return (
-        analysis,
-        advisory,
-        validation,
-        farmer_alert,
-        f"{risk_level}\nRisk Score: {risk_score}/100",
-        farmer_map._repr_html_(),
-        status
-    )
+        return (
+            analysis,
+            advisory,
+            validation,
+            farmer_alert,
+            f"{risk_level}\nRisk Score: {risk_score}/100",
+            map_html,
+            status
+        )
 
 
+    except Exception as e:
+
+        print(
+            "❌ Complete analysis error:",
+            e
+        )
+
+        return (
+            f"❌ Analysis failed: {str(e)}",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "❌ Analysis failed."
+        )
 
 import requests
 
