@@ -272,11 +272,9 @@ Use integrated pest management and continue regular monitoring.
 🔬 Expert validation:
 Contact an agricultural expert if the risk is high.
 """
-
     return generate_advisory(disease, pest, weather_risk)
-
-        def complete_analysis(img, language, latitude, longitude):
-
+    
+def complete_analysis(img, language, latitude, longitude):
     if img is None:
         return (
             "⚠️ Please upload a crop image.",
