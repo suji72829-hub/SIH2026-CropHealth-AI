@@ -274,7 +274,8 @@ Contact an agricultural expert if the risk is high.
 """
 
     return generate_advisory(disease, pest, weather_risk)
-def complete_analysis(img, language, latitude, longitude):
+
+        def complete_analysis(img, language, latitude, longitude):
 
     if img is None:
         return (
@@ -298,14 +299,9 @@ def complete_analysis(img, language, latitude, longitude):
         disease_model.eval()
 
         with torch.no_grad():
-
             output = disease_model(image_tensor)
-
             probs = torch.softmax(output, dim=1)
-
-            confidence, predicted = torch.max(
-                probs, 1
-            )
+            confidence, predicted = torch.max(probs, 1)
 
         disease = classes[predicted.item()]
         disease_conf = float(confidence.item())
@@ -316,13 +312,8 @@ def complete_analysis(img, language, latitude, longitude):
         # =================================================
 
         if disease_conf >= CONFIDENCE_THRESHOLD:
-
-            validation = (
-                "✅ Prediction confidence acceptable."
-            )
-
+            validation = "✅ Prediction confidence acceptable."
         else:
-
             validation = (
                 "⚠️ Uncertain prediction\n"
                 "🔬 Expert validation recommended."
@@ -332,11 +323,45 @@ def complete_analysis(img, language, latitude, longitude):
         # =================================================
         # 3. PEST DETECTION
         # =================================================
-          
 
-pest_name = "No pest detection (testing)"
-pest_conf = 0.0
-                 
+        pest_name = "No pest detected"
+        pest_conf = 0.0
+
+        try:
+
+            pest_results = pest_model.predict(
+                source=img,
+                imgsz=320,
+                conf=0.25,
+                max_det=3,
+                verbose=False
+            )
+
+            if (
+                len(pest_results) > 0
+                and len(pest_results[0].boxes) > 0
+            ):
+
+                boxes = pest_results[0].boxes
+
+                best_index = int(
+                    torch.argmax(boxes.conf).item()
+                )
+
+                pest_conf = float(
+                    boxes.conf[best_index].item()
+                )
+
+                pest_id = int(
+                    boxes.cls[best_index].item()
+                )
+
+                pest_name = pest_results[0].names[pest_id]
+
+        except Exception as e:
+
+            print("⚠️ Pest detection error:", e)
+
 
         # =================================================
         # 4. WEATHER
@@ -345,7 +370,6 @@ pest_conf = 0.0
         temperature = 0.0
         humidity = 0.0
         rainfall = 0.0
-
         weather_risk = "⚠️ Weather unavailable"
 
         try:
@@ -370,30 +394,18 @@ pest_conf = 0.0
 
             weather = response.json()
 
-            current = weather.get(
-                "current",
-                {}
-            )
+            current = weather.get("current", {})
 
             temperature = float(
-                current.get(
-                    "temperature_2m",
-                    0
-                )
+                current.get("temperature_2m", 0)
             )
 
             humidity = float(
-                current.get(
-                    "relative_humidity_2m",
-                    0
-                )
+                current.get("relative_humidity_2m", 0)
             )
 
             rainfall = float(
-                current.get(
-                    "rain",
-                    0
-                )
+                current.get("rain", 0)
             )
 
             weather_risk = get_weather_risk(
@@ -404,10 +416,7 @@ pest_conf = 0.0
 
         except Exception as e:
 
-            print(
-                "⚠️ Weather error:",
-                e
-            )
+            print("⚠️ Weather error:", e)
 
 
         # =================================================
@@ -431,7 +440,7 @@ pest_conf = 0.0
 
 
         # =================================================
-        # 7. FARMER ADVISORY
+        # 7. ADVISORY
         # =================================================
 
         advisory = get_multilingual_advisory(
@@ -443,7 +452,7 @@ pest_conf = 0.0
 
 
         # =================================================
-        # 8. FARMER LOCATION MAP
+        # 8. LOCATION MAP
         # =================================================
 
         try:
@@ -465,9 +474,7 @@ pest_conf = 0.0
                 tooltip="Farmer Location"
             ).add_to(farmer_map)
 
-            map_html = (
-                farmer_map._repr_html_()
-            )
+            map_html = farmer_map._repr_html_()
 
         except Exception:
 
@@ -515,9 +522,7 @@ Latitude: {latitude}
 Longitude: {longitude}
 """
 
-        status = (
-            "✅ Analysis completed successfully."
-        )
+        status = "✅ Analysis completed successfully."
 
         return (
             analysis,
@@ -532,10 +537,7 @@ Longitude: {longitude}
 
     except Exception as e:
 
-        print(
-            "❌ Complete analysis error:",
-            e
-        )
+        print("❌ Complete analysis error:", e)
 
         return (
             f"❌ Analysis failed: {str(e)}",
@@ -545,7 +547,19 @@ Longitude: {longitude}
             "",
             "",
             "❌ Analysis failed."
-        )
+        )    
+        
+
+      
+
+
+       
+              
+
+
+        
+          
+        
 
 import requests
 
